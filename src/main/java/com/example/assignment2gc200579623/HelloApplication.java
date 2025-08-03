@@ -219,7 +219,7 @@ public class HelloApplication extends Application {
         task.setOnSucceeded(e -> {
             JSONObject marsData = task.getValue();
             displayMarsPhotos(marsData);
-            updateStatus("Mars Rover photos loaded successfully! 🔴");
+            updateStatus("Mars Rover photos loaded successfully! ");
         });
 
         task.setOnFailed(e -> {
@@ -305,7 +305,7 @@ public class HelloApplication extends Application {
     private void displayMarsPhotos(JSONObject marsData) {
         JSONArray photos = marsData.getJSONArray("photos");
 
-        Label title = new Label("🔴 Mars Rover Photos - Curiosity");
+        Label title = new Label("Mars Rover Photos - Curiosity");
         title.setFont(Font.font("Arial", FontWeight.BOLD, 24));
         title.setTextFill(Color.WHITE);
 
@@ -319,6 +319,9 @@ public class HelloApplication extends Application {
 
         int maxPhotos = Math.min(6, photos.length());
         int col = 0, row = 0;
+
+        // Add debug information
+        System.out.println("Total photos available: " + photos.length());
 
         for (int i = 0; i < maxPhotos; i++) {
             JSONObject photo = photos.getJSONObject(i);
@@ -334,25 +337,107 @@ public class HelloApplication extends Application {
             imageView.setPreserveRatio(true);
             imageView.setSmooth(true);
 
-            // Load image asynchronously
+            // Add placeholder while loading
+            imageView.setStyle("-fx-background-color: #3b4252; -fx-border-color: #5e81ac; -fx-border-width: 2;");
+
+            // Get image URL and convert HTTP to HTTPS if needed
             String imageUrl = photo.getString("img_src");
-            CompletableFuture.supplyAsync(() -> {
-                try {
-                    return new Image(imageUrl, true);
-                } catch (Exception e) {
-                    return null;
+            if (imageUrl.startsWith("http://")) {
+                imageUrl = imageUrl.replace("http://", "https://");
+            }
+
+            System.out.println("Loading image: " + imageUrl);
+
+            // Load image with better error handling
+            final String finalImageUrl = imageUrl;
+            Task<Image> imageTask = new Task<Image>() {
+                @Override
+                protected Image call() throws Exception {
+                    try {
+                        // Add connection timeout and user agent
+                        Image image = new Image(finalImageUrl, 180, 180, true, true, true);
+
+                        // Check if image loaded successfully
+                        if (image.isError()) {
+                            System.err.println("Image loading error for: " + finalImageUrl);
+                            System.err.println("Error: " + image.getException());
+                            return null;
+                        }
+                        return image;
+                    } catch (Exception e) {
+                        System.err.println("Exception loading image: " + finalImageUrl);
+                        e.printStackTrace();
+                        return null;
+                    }
                 }
-            }).thenAccept(image -> {
-                if (image != null) {
-                    Platform.runLater(() -> imageView.setImage(image));
+            };
+
+            imageTask.setOnSucceeded(e -> {
+                Image image = imageTask.getValue();
+                if (image != null && !image.isError()) {
+                    Platform.runLater(() -> {
+                        imageView.setImage(image);
+                        System.out.println("Successfully loaded image: " + finalImageUrl);
+                    });
+                } else {
+                    Platform.runLater(() -> {
+                        // Show error placeholder
+                        Label errorLabel = new Label("\nImage\nFailed");
+                        errorLabel.setTextFill(Color.RED);
+                        errorLabel.setFont(Font.font("Arial", FontWeight.BOLD, 12));
+                        errorLabel.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
+
+                        VBox errorBox = new VBox(errorLabel);
+                        errorBox.setAlignment(Pos.CENTER);
+                        errorBox.setPrefSize(180, 180);
+                        errorBox.setStyle("-fx-background-color: #bf616a; -fx-border-color: #d08770; -fx-border-width: 2;");
+
+                        // Replace imageView with error box in parent
+                        photoBox.getChildren().set(0, errorBox);
+                        System.err.println("Showing error placeholder for: " + finalImageUrl);
+                    });
                 }
             });
 
+            imageTask.setOnFailed(e -> {
+                Platform.runLater(() -> {
+                    Label errorLabel = new Label("\nNetwork\nError");
+                    errorLabel.setTextFill(Color.RED);
+                    errorLabel.setFont(Font.font("Arial", FontWeight.BOLD, 12));
+                    errorLabel.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
+
+                    VBox errorBox = new VBox(errorLabel);
+                    errorBox.setAlignment(Pos.CENTER);
+                    errorBox.setPrefSize(180, 180);
+                    errorBox.setStyle("-fx-background-color: #bf616a; -fx-border-color: #d08770; -fx-border-width: 2;");
+
+                    photoBox.getChildren().set(0, errorBox);
+                    System.err.println("Network error loading: " + finalImageUrl);
+                    if (imageTask.getException() != null) {
+                        imageTask.getException().printStackTrace();
+                    }
+                });
+            });
+
+            // Start the image loading task
+            new Thread(imageTask).start();
+
+            // Add camera and sol information
             Label photoInfo = new Label("Sol: " + photo.getInt("sol"));
             photoInfo.setTextFill(Color.LIGHTGRAY);
             photoInfo.setFont(Font.font("Arial", FontWeight.NORMAL, 12));
 
-            photoBox.getChildren().addAll(imageView, photoInfo);
+            // Add camera info if available
+            if (photo.has("camera")) {
+                JSONObject camera = photo.getJSONObject("camera");
+                Label cameraInfo = new Label("Camera: " + camera.getString("name"));
+                cameraInfo.setTextFill(Color.LIGHTBLUE);
+                cameraInfo.setFont(Font.font("Arial", FontWeight.NORMAL, 10));
+                photoBox.getChildren().addAll(imageView, photoInfo, cameraInfo);
+            } else {
+                photoBox.getChildren().addAll(imageView, photoInfo);
+            }
+
             photoGrid.add(photoBox, col, row);
 
             col++;
@@ -363,6 +448,14 @@ public class HelloApplication extends Application {
         }
 
         contentArea.getChildren().add(photoGrid);
+
+        // Add loading status
+        if (photos.length() == 0) {
+            Label noPhotos = new Label("No photos available for Sol 1000");
+            noPhotos.setTextFill(Color.ORANGE);
+            noPhotos.setFont(Font.font("Arial", FontWeight.NORMAL, 16));
+            contentArea.getChildren().add(noPhotos);
+        }
     }
 
     private void displayNearEarthObjects(JSONObject neoData) {
