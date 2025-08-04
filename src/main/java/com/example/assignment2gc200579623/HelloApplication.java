@@ -41,7 +41,7 @@ public class HelloApplication extends Application {
     @Override
     public void start(Stage stage) throws Exception {
         this.primaryStage = stage;
-        setupUI();
+        setupUI(); // Set up all main layouts and controls
         primaryStage.setTitle("NASA Space Explorer - Assignment 2");
 
         // Try to load icon, but don't fail if it doesn't exist
@@ -301,7 +301,7 @@ public class HelloApplication extends Application {
         apodBox.getChildren().addAll(title, date, explanation);
         contentArea.getChildren().add(apodBox);
     }
-
+    // Example of a comment for image loading in Mars photos
     private void displayMarsPhotos(JSONObject marsData) {
         JSONArray photos = marsData.getJSONArray("photos");
 
